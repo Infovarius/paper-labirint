@@ -411,7 +411,7 @@
   function renderMap() {
     if (!game) return;
     const canvas = $('#mazeCanvas'), ctx = canvas.getContext('2d');
-    const size = game.size, tile = Math.max(17, Math.min(28, Math.floor(570 / size))), pad = 7;
+    const size = game.size, tile = 2 * Math.max(17, Math.min(28, Math.floor(570 / size))), pad = 7;
     canvas.width = size * tile + pad * 2; canvas.height = size * tile + pad * 2;
     ctx.fillStyle = '#101b1a'; ctx.fillRect(0, 0, canvas.width, canvas.height);
     const terrainColors = { hospital: '#e27e73', teleporter: '#bc9bef', river: '#75b9d1', arsenal: '#eaa875' };
@@ -450,7 +450,11 @@
           }
         }
       }
-      if (cell.item) { ctx.fillStyle = cell.item.real ? '#e6ca71' : '#84775e'; ctx.beginPath(); ctx.arc(px + tile / 2, py + tile / 2, tile * .19, 0, Math.PI * 2); ctx.fill(); }
+      if (cell.item) {
+        const cx = px + tile / 2, cy = py + tile / 2, radius = tile * .28;
+        ctx.fillStyle = cell.item.real ? '#e6ca71' : '#84775e'; ctx.beginPath();
+        ctx.moveTo(cx, cy - radius); ctx.lineTo(cx + radius, cy); ctx.lineTo(cx, cy + radius); ctx.lineTo(cx - radius, cy); ctx.closePath(); ctx.fill();
+      }
       ctx.strokeStyle = '#91a49a'; ctx.lineWidth = Math.max(1.4, tile * .075); ctx.lineCap = 'round';
       const x0 = px, y0 = py, x1 = px + tile, y1 = py + tile;
       if (cell.walls.N) { ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y0); ctx.stroke(); }
