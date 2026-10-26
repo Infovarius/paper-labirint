@@ -15,3 +15,4 @@
 .map-legend>span{display:inline-flex;align-items:center;gap:7px}
 .map-legend .legend-icon{display:block;width:18px;height:18px;flex:0 0 18px}
 .legend-icon.exit{color:var(--green)}
+.player-card.away{border-style:dashed}

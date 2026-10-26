@@ -125,7 +125,7 @@
     const names = [...nameFields.querySelectorAll('input')].map((input, i) => input.value.trim() || `Игрок ${i + 1}`);
     for (let i = 0; i < count; i++) {
       const p = takeCoord(reserved);
-      game.players.push({ id: i, name: names[i], x: p.x, y: p.y, bullets: 0, dynamite: 0, cargo: null, riverEscape: 0, escaped: false, alive: true });
+      game.players.push({ id: i, name: names[i], x: p.x, y: p.y, bullets: 0, dynamite: 0, cargo: null, riverEscape: 0, escaped: false, outside: false, alive: true });
     }
     for (let pair = 0; pair < requested.teleports; pair++) {
       const a = takeCoord(reserved), b = takeCoord(reserved), pairId = pair + 1;
@@ -158,7 +158,7 @@
   }
 
   function currentPlayer() { return game && game.players[game.turn]; }
-  function coordinateHasPlayer(x, y, exceptId = -1) { return game.players.find(p => p.alive && !p.escaped && p.id !== exceptId && p.x === x && p.y === y); }
+  function coordinateHasPlayer(x, y, exceptId = -1) { return game.players.find(p => p.alive && !p.escaped && !p.outside && p.id !== exceptId && p.x === x && p.y === y); }
 
   function pushLog(player, message, type = 'normal') {
     const line = { turn: game.turnNumber, name: player ? player.name : 'Ведущий', message, type };
@@ -270,7 +270,7 @@
     renderMap(); renderGame();
     $('#resultTitle').textContent = winner ? `${winner.name} победил!` : 'Партия завершена';
     $('#resultCopy').textContent = message;
-    $('#scoreList').innerHTML = game.players.map(p => `<div class="score-item"><span>${escapeHtml(p.name)}</span><strong>${p.id === (winner?.id ?? -1) ? 'ВЫНЕС КЛАД' : p.escaped ? 'ВЫШЕЛ' : p.cargo ? 'НЕСЁТ КЛАД' : 'В ЛАБИРИНТЕ'}</strong></div>`).join('');
+    $('#scoreList').innerHTML = game.players.map(p => `<div class="score-item"><span>${escapeHtml(p.name)}</span><strong>${p.id === (winner?.id ?? -1) ? 'ВЫНЕС КЛАД' : p.escaped ? 'ПОБЕДИЛ' : p.outside ? 'СНАРУЖИ · МОЖЕТ ВЕРНУТЬСЯ' : p.cargo ? 'НЕСЁТ КЛАД' : 'В ЛАБИРИНТЕ'}</strong></div>`).join('');
     $('#resultModal').classList.remove('hidden');
   }
 
@@ -294,6 +294,16 @@
   }
 
   function doMove(player, dir, steps) {
+    if (player.outside) {
+      const inward = DIRS[game.exit.dir].opposite;
+      if (dir !== inward) {
+        $('#actionHint').textContent = `Чтобы вернуться, выберите направление ${DIRS[inward].label}.`;
+        return;
+      }
+      player.outside = false;
+      setReport(player, 'Вы вернулись в лабиринт.');
+      finishAction(); return;
+    }
     if (player.riverEscape > 0) {
       const d = DIRS[dir];
       const nx = player.x + d.dx, ny = player.y + d.dy;
@@ -305,9 +315,11 @@
       } else {
         player.riverEscape = 0;
         if (!inBounds(nx, ny, game.size)) {
-          player.escaped = true; player.alive = false;
-          if (player.cargo === 'real') { setReport(player, 'Вы выбрались из реки и вынесли настоящий клад!', 'good'); renderGame(); renderMap(); endGame(player, `${player.name} нашёл настоящий клад и покинул лабиринт.`); return; }
-          setReport(player, player.cargo ? 'Вы вышли из лабиринта с ложным кладом.' : 'Вы выбрались из реки и покинули лабиринт.');
+          if (player.cargo === 'real') { player.escaped = true; player.alive = false; setReport(player, 'Вы выбрались из реки и вынесли настоящий клад!', 'good'); renderGame(); renderMap(); endGame(player, `${player.name} нашёл настоящий клад и покинул лабиринт.`); return; }
+          player.outside = true;
+          const carriedFake = player.cargo === 'fake';
+          player.cargo = null;
+          setReport(player, carriedFake ? 'Вы вышли с фальшивым кладом. Победы нет; в следующий ход можно вернуться.' : 'Вы вышли без настоящего клада. В следующий ход можно вернуться.');
         } else {
           player.x = nx; player.y = ny;
           setReport(player, 'Вам удалось выбраться из реки.');
@@ -322,9 +334,11 @@
       const d = DIRS[dir], nx = player.x + d.dx, ny = player.y + d.dy;
       if (cellAt(player.x, player.y).walls[dir]) { hitWall = true; break; }
       if (!inBounds(nx, ny, game.size)) {
-        player.escaped = true; player.alive = false;
-        if (player.cargo === 'real') { setReport(player, 'Вы вынесли настоящий клад из лабиринта!', 'good'); renderGame(); renderMap(); endGame(player, `${player.name} нашёл настоящий клад и покинул лабиринт.`); return; }
-        setReport(player, player.cargo ? 'Вы покинули лабиринт с ложным кладом.' : 'Вы покинули лабиринт.');
+        if (player.cargo === 'real') { player.escaped = true; player.alive = false; setReport(player, 'Вы вынесли настоящий клад из лабиринта!', 'good'); renderGame(); renderMap(); endGame(player, `${player.name} нашёл настоящий клад и покинул лабиринт.`); return; }
+        player.outside = true;
+        const carriedFake = player.cargo === 'fake';
+        player.cargo = null;
+        setReport(player, carriedFake ? 'Вы вышли с фальшивым кладом. Победы нет; в следующий ход можно вернуться.' : 'Вы вышли без настоящего клада. В следующий ход можно вернуться.');
         stopped = true; exited = true; break;
       }
       player.x = nx; player.y = ny; moved++;
@@ -372,6 +386,7 @@
   function chooseDirection(dir) {
     if (!game || !game.running) return;
     const player = currentPlayer(); if (!player) return;
+    if (player.outside) { doMove(player, dir, 1); return; }
     const action = player.riverEscape > 0 ? 'move' : selectedAction;
     if (action === 'move') doMove(player, dir, Math.max(1, Math.min(10, Number($('#steps').value) || 1)));
     else if (action === 'shoot') doShoot(player, dir);
@@ -379,11 +394,13 @@
   }
 
   function selectAction(action) {
+    const player = currentPlayer();
+    if (player?.outside && action !== 'move') return;
     selectedAction = action;
     document.querySelectorAll('.action-tab').forEach(button => button.classList.toggle('active', button.dataset.action === action));
-    $('#moveOptions').classList.toggle('hidden', action !== 'move');
+    $('#moveOptions').classList.toggle('hidden', player?.outside || action !== 'move');
     const hints = { move: 'Выберите направление. Стены остановят движение.', shoot: 'Выберите направление — пуля летит до стены или игрока.', dynamite: 'Выберите соседнюю стену, которую нужно разрушить.' };
-    $('#actionHint').textContent = hints[action];
+    $('#actionHint').textContent = player?.outside ? `Вы снаружи. В свой следующий ход вернитесь направлением ${DIRS[DIRS[game.exit.dir].opposite].label}.` : hints[action];
   }
 
   function renderGame() {
@@ -392,16 +409,23 @@
     if (!player) return;
     $('#currentPlayerName').textContent = player.name;
     $('#currentPlayerAvatar').textContent = player.name.slice(0, 1).toLocaleUpperCase('ru');
-    $('#currentPlayerState').textContent = player.riverEscape > 0 ? 'В реке' : player.cargo ? 'Несёт клад' : 'В лабиринте';
+    $('#currentPlayerState').textContent = player.outside ? 'Снаружи · у выхода' : player.riverEscape > 0 ? 'В реке' : player.cargo ? 'Несёт клад' : 'В лабиринте';
     $('#riverAlert').classList.toggle('hidden', player.riverEscape <= 0);
     $('#riverTurnsText').textContent = `Осталось попыток: ${player.riverEscape}`;
     $('#ammoBadge').textContent = player.bullets;
     $('#dynamiteBadge').textContent = player.dynamite;
     $('#playersList').innerHTML = game.players.map((p, i) => {
-      const status = p.escaped ? 'Покинул лабиринт' : !p.alive ? 'Вне игры' : p.riverEscape ? 'В реке' : p.cargo ? 'Несёт клад' : 'В лабиринте';
-      return `<div class="player-card ${i === game.turn && game.running ? 'active' : ''} ${p.escaped ? 'out' : ''}"><div class="avatar">${escapeHtml(p.name.slice(0, 1).toLocaleUpperCase('ru'))}</div><div class="player-info"><strong>${escapeHtml(p.name)}</strong><small>${status}</small></div><div class="inventory"><span>● ${p.bullets}</span><span>◆ ${p.dynamite}</span></div></div>`;
+      const status = p.escaped ? 'Победил' : !p.alive ? 'Вне игры' : p.outside ? 'Снаружи · может вернуться' : p.riverEscape ? 'В реке' : p.cargo ? 'Несёт клад' : 'В лабиринте';
+      return `<div class="player-card ${i === game.turn && game.running ? 'active' : ''} ${p.escaped ? 'out' : p.outside ? 'away' : ''}"><div class="avatar">${escapeHtml(p.name.slice(0, 1).toLocaleUpperCase('ru'))}</div><div class="player-info"><strong>${escapeHtml(p.name)}</strong><small>${status}</small></div><div class="inventory"><span>● ${p.bullets}</span><span>◆ ${p.dynamite}</span></div></div>`;
     }).join('');
-    document.querySelectorAll('.action-tab').forEach(button => button.disabled = !game.running);
+    document.querySelectorAll('.action-tab').forEach(button => {
+      button.disabled = !game.running || (player.outside && button.dataset.action !== 'move');
+      if (player.outside) button.classList.toggle('active', button.dataset.action === 'move');
+    });
+    if (player.outside) {
+      $('#moveOptions').classList.add('hidden');
+      $('#actionHint').textContent = `Вы снаружи. В свой следующий ход вернитесь направлением ${DIRS[DIRS[game.exit.dir].opposite].label}.`;
+    }
     if (player.riverEscape > 0) {
       document.querySelectorAll('.action-tab').forEach(button => button.classList.toggle('active', button.dataset.action === 'move'));
       $('#actionHint').textContent = 'Выберите направление, чтобы попытаться выбраться из реки.';
@@ -411,7 +435,7 @@
   function renderMap() {
     if (!game) return;
     const canvas = $('#mazeCanvas'), ctx = canvas.getContext('2d');
-    const size = game.size, tile = 2 * Math.max(17, Math.min(28, Math.floor(570 / size))), pad = 7;
+    const size = game.size, tile = 2 * Math.max(17, Math.min(28, Math.floor(570 / size))), pad = tile + 7;
     canvas.width = size * tile + pad * 2; canvas.height = size * tile + pad * 2;
     ctx.fillStyle = '#101b1a'; ctx.fillRect(0, 0, canvas.width, canvas.height);
     const terrainColors = { hospital: '#e27e73', teleporter: '#bc9bef', river: '#75b9d1', arsenal: '#eaa875' };
@@ -471,7 +495,13 @@
       }
     }
     game.players.filter(p => p.alive && !p.escaped).forEach((p, i) => {
-      const px = pad + p.x * tile + tile / 2, py = pad + p.y * tile + tile / 2;
+      let px = pad + p.x * tile + tile / 2, py = pad + p.y * tile + tile / 2;
+      if (p.outside) {
+        if (game.exit.dir === 'N') py -= tile;
+        if (game.exit.dir === 'S') py += tile;
+        if (game.exit.dir === 'E') px += tile;
+        if (game.exit.dir === 'W') px -= tile;
+      }
       ctx.fillStyle = ['#c6ee8c', '#efaa83', '#bc9bef', '#75b9d1', '#e6ca71', '#f08b9d'][i % 6];
       ctx.beginPath(); ctx.arc(px, py, tile * .25, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = '#14201a'; ctx.font = `bold ${Math.max(8, tile * .32)}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(String(i + 1), px, py + .5);
