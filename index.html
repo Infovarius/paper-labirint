@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101b1a">
+  <title>Лабиринт — игровой ведущий</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <a class="brand" href="#" aria-label="Лабиринт — на главную">
+        <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+        <span>ЛАБИРИНТ<span class="brand-caption">ИГРОВОЙ ВЕДУЩИЙ</span></span>
+      </a>
+      <div id="headerStatus" class="header-status"><span class="status-dot"></span> Новая партия</div>
+    </header>
+
+    <main id="setupScreen" class="setup-screen">
+      <section class="intro">
+        <p class="eyebrow">СОБЕРИТЕСЬ ЗА ОДНИМ ЭКРАНОМ</p>
+        <h1>Выйти живым.<br><span>Вынести клад.</span></h1>
+        <p class="intro-copy">Лабиринт скрыт от игроков. Ведущий следит за картой, а программа сообщает только то, что встречается на пути.</p>
+        <div class="intro-note"><span class="note-icon">✳</span><span>Один настоящий клад. Много путей. Ни одной видимой стены.</span></div>
+      </section>
+
+      <section class="setup-card">
+        <div class="card-heading"><div><p class="eyebrow">НАСТРОЙКА</p><h2>Новая партия</h2></div><span class="step-badge">01 <span>/ 01</span></span></div>
+        <div class="field-group">
+          <label for="mazeSize">Размер лабиринта · клеток в сторону</label>
+          <div class="number-wrap"><input id="mazeSize" type="number" min="7" max="51" step="1" value="15"><span>×</span></div>
+        </div>
+        <div class="field-group">
+          <div class="label-row"><label for="playerCount">Игроки</label><span id="playerCountValue" class="value-pill">2 игрока</span></div>
+          <input id="playerCount" type="range" min="1" max="6" value="2">
+          <div class="range-labels"><span>1 игрок</span><span>6 игроков</span></div>
+        </div>
+        <div class="field-group"><div class="label-row"><label>Особые места</label><span class="optional-label">МОЖНО ИЗМЕНИТЬ</span></div>
+          <div class="counts-grid">
+            <label class="count-control"><span><i class="legend-dot teleporter"></i>Пары телепортов</span><input type="number" id="teleporterCount" min="0" max="4" value="2"></label>
+            <label class="count-control"><span><i class="legend-dot river"></i>Участки реки</span><input type="number" id="riverCount" min="0" max="5" value="2"></label>
+            <label class="count-control"><span><i class="legend-dot arsenal"></i>Арсеналы</span><input type="number" id="arsenalCount" min="0" max="6" value="3"></label>
+            <label class="count-control"><span><i class="legend-dot fake"></i>Ложные клады</span><input type="number" id="fakeCount" min="0" max="6" value="2"></label>
+          </div>
+          <p class="field-hint">Госпиталь, выход и настоящий клад добавятся автоматически.</p>
+        </div>
+        <div id="nameFields" class="name-fields"></div>
+        <button id="startGame" class="primary-button">Создать лабиринт <span>↗</span></button>
+        <p class="privacy-hint"><span>◉</span> Игроки не увидят карту, пока ведущий не откроет её.</p>
+      </section>
+    </main>
+
+    <main id="gameScreen" class="game-screen hidden">
+      <section class="game-main">
+        <div class="game-heading">
+          <div><p class="eyebrow">ПАРТИЯ ИДЁТ</p><h1 id="gameTitle">Средний лабиринт</h1></div>
+          <div class="game-tools"><span id="turnBadge" class="turn-badge">ХОД 1</span><button id="mapToggle" class="secondary-button">◉ <span>Карта ведущего</span></button></div>
+        </div>
+        <div id="mapPanel" class="map-panel hidden"><div class="map-panel-heading"><div><span class="map-kicker">СЕКРЕТНАЯ КАРТА</span><strong>Видна только ведущему</strong></div><button id="hideMap" class="icon-button" aria-label="Скрыть карту">×</button></div><canvas id="mazeCanvas" aria-label="Карта лабиринта для ведущего"></canvas><div class="map-legend"><span><i class="legend-dot exit"></i>Выход</span><span><i class="legend-dot hospital"></i>Госпиталь</span><span><i class="legend-dot teleporter"></i>Телепорт</span><span><i class="legend-dot river"></i>Река</span><span><i class="legend-dot arsenal"></i>Арсенал</span><span><i class="legend-dot treasure"></i>Клад</span></div></div>
+        <div class="turn-layout">
+          <section class="action-card">
+            <div class="current-player"><div id="currentPlayerAvatar" class="avatar">А</div><div><span class="subtle-label">СЕЙЧАС ХОДИТ</span><h2 id="currentPlayerName">Игрок 1</h2></div><span id="currentPlayerState" class="player-state">В лабиринте</span></div>
+            <div id="riverAlert" class="river-alert hidden"><span>〰</span><div><strong>Вас несёт течение</strong><small id="riverTurnsText">Осталось попыток: 2</small></div></div>
+            <div class="action-section"><div class="section-title"><span class="section-number">01</span><div><h3>Выберите действие</h3><p>Игрок не видит своего положения</p></div></div>
+              <div class="action-tabs" role="tablist"><button class="action-tab active" data-action="move" role="tab">Шаг</button><button class="action-tab" data-action="shoot" role="tab">Выстрел <span id="ammoBadge" class="mini-count">0</span></button><button class="action-tab" data-action="dynamite" role="tab">Динамит <span id="dynamiteBadge" class="mini-count">0</span></button></div>
+              <div id="moveOptions" class="move-options"><label for="steps">Шагов в направлении</label><div class="stepper"><button id="stepMinus" aria-label="Уменьшить число шагов">−</button><input id="steps" type="number" min="1" max="10" value="1"><button id="stepPlus" aria-label="Увеличить число шагов">+</button></div></div>
+              <div class="direction-pad" aria-label="Выбрать направление"><button class="direction up" data-dir="N" aria-label="Север">↑<small>С</small></button><button class="direction left" data-dir="W" aria-label="Запад">←<small>З</small></button><button class="direction center" disabled aria-hidden="true">✳</button><button class="direction right" data-dir="E" aria-label="Восток">→<small>В</small></button><button class="direction down" data-dir="S" aria-label="Юг">↓<small>Ю</small></button></div>
+              <p id="actionHint" class="action-hint">Выберите направление. Стены остановят движение.</p>
+            </div>
+            <div class="turn-footer"><span><span class="key-icon">↵</span> После действия ход перейдёт следующему</span><button id="endGame" class="text-button">Завершить партию</button></div>
+          </section>
+          <aside class="report-card"><div class="report-heading"><div><p class="eyebrow">ПОСЛЕДНИЙ ОТЧЁТ</p><h2>Что произошло</h2></div><span class="report-pulse"></span></div><div id="latestReport" class="latest-report"><span class="report-ornament">✳</span><p>Первый игрок готов войти в лабиринт.</p></div><div class="log-heading"><span>ЖУРНАЛ ПАРТИИ</span><span id="logCount">0 событий</span></div><div id="eventLog" class="event-log"><p class="empty-log">Здесь появятся результаты ходов.</p></div></aside>
+        </div>
+        <section class="players-section"><div class="players-heading"><div><p class="eyebrow">УЧАСТНИКИ</p><h2>Игроки</h2></div><span id="playersSummary" class="subtle-label">2 игрока · по очереди</span></div><div id="playersList" class="players-list"></div></section>
+      </section>
+      <footer class="game-footer"><span>ЛАБИРИНТ <i>·</i> ИГРОВОЙ ВЕДУЩИЙ</span><button id="newGame" class="text-button">Новая партия</button></footer>
+    </main>
+
+    <div id="resultModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="resultTitle"><section class="result-card"><span class="result-spark">✳</span><p class="eyebrow">ПАРТИЯ ЗАВЕРШЕНА</p><h2 id="resultTitle">Победа!</h2><p id="resultCopy"></p><div id="scoreList" class="score-list"></div><button id="resultNewGame" class="primary-button">Новая партия <span>↗</span></button></section></div>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
