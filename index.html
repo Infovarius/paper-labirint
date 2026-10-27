@@ -9,6 +9,7 @@
 </head>
 <body>
   <div class="app-shell">
+    <aside id="gameOverToast" class="game-over-toast hidden" role="status" aria-live="polite"><button id="closeGameOverToast" class="toast-close" aria-label="Закрыть уведомление">×</button><span class="toast-spark">✦</span><div><strong id="toastTitle">Игра окончена</strong><p id="toastMessage"></p></div></aside>
     <header class="topbar">
       <a class="brand" href="#" aria-label="Лабиринт — на главную">
         <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
@@ -54,10 +55,11 @@
     <main id="gameScreen" class="game-screen hidden">
       <section class="game-main">
         <div class="game-heading">
-          <div><p class="eyebrow">ПАРТИЯ ИДЁТ</p><h1 id="gameTitle">Средний лабиринт</h1></div>
+          <div><p id="gameEyebrow" class="eyebrow">ПАРТИЯ ИДЁТ</p><h1 id="gameTitle">Средний лабиринт</h1></div>
           <div class="game-tools"><span id="turnBadge" class="turn-badge">ХОД 1</span><button id="mapToggle" class="secondary-button">◉ <span>Карта ведущего</span></button></div>
         </div>
-        <div id="mapPanel" class="map-panel hidden"><div class="map-panel-heading"><div><span class="map-kicker">СЕКРЕТНАЯ КАРТА</span><strong>Видна только ведущему</strong></div><button id="hideMap" class="icon-button" aria-label="Скрыть карту">×</button></div><canvas id="mazeCanvas" aria-label="Карта лабиринта для ведущего"></canvas><div class="map-legend">
+        <section id="endgamePanel" class="endgame-panel hidden" aria-labelledby="resultTitle"><div class="endgame-copy"><p class="eyebrow">ПАРТИЯ ЗАВЕРШЕНА</p><h2 id="resultTitle">Победа!</h2><p id="resultCopy"></p></div><div id="scoreList" class="score-list"></div><button id="resultNewGame" class="secondary-button">Новая партия ↗</button></section>
+        <div id="mapPanel" class="map-panel hidden"><div class="map-panel-heading"><div><span class="map-kicker">СЕКРЕТНАЯ КАРТА</span><strong>Видна только ведущему</strong></div><div class="map-actions"><button id="exportField" class="secondary-button">Скачать поле PNG</button><button id="hideMap" class="icon-button" aria-label="Скрыть карту">×</button></div></div><canvas id="mazeCanvas" aria-label="Карта лабиринта для ведущего"></canvas><div class="map-legend">
           <span><svg class="legend-icon exit" viewBox="0 0 20 20" aria-hidden="true"><path d="M2 10h5m2 0h8m-4-4 4 4-4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Выход</span>
           <span><svg class="legend-icon hospital" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="4" fill="#663f43"/><path d="M8 4h4v4h4v4h-4v4H8v-4H4V8h4z" fill="#ffe5d9"/></svg>Госпиталь</span>
           <span><svg class="legend-icon teleporter" viewBox="0 0 20 20" aria-hidden="true"><rect x="1" y="1" width="18" height="18" rx="4" fill="#493b66"/><circle cx="10" cy="10" r="6.5" fill="none" stroke="#eadcff" stroke-width="1.5"/><circle cx="10" cy="10" r="3.2" fill="none" stroke="#eadcff" stroke-width="1.5"/><circle cx="10" cy="10" r="1" fill="#eadcff"/></svg>Телепорт</span>
@@ -77,14 +79,13 @@
             </div>
             <div class="turn-footer"><span><span class="key-icon">↵</span> После действия ход перейдёт следующему</span><button id="endGame" class="text-button">Завершить партию</button></div>
           </section>
-          <aside class="report-card"><div class="report-heading"><div><p class="eyebrow">ПОСЛЕДНИЙ ОТЧЁТ</p><h2>Что произошло</h2></div><span class="report-pulse"></span></div><div id="latestReport" class="latest-report"><span class="report-ornament">✳</span><p>Первый игрок готов войти в лабиринт.</p></div><div class="log-heading"><span>ЖУРНАЛ ПАРТИИ</span><span id="logCount">0 событий</span></div><div id="eventLog" class="event-log"><p class="empty-log">Здесь появятся результаты ходов.</p></div></aside>
+          <aside class="report-card"><div class="report-heading"><div><p class="eyebrow">ПОСЛЕДНИЙ ОТЧЁТ</p><h2>Что произошло</h2></div><span class="report-pulse"></span></div><div id="latestReport" class="latest-report"><span class="report-ornament">✳</span><p>Первый игрок готов войти в лабиринт.</p></div><div class="log-heading"><span>ЖУРНАЛ ПАРТИИ</span><button id="exportLog" class="text-button">Скачать CSV</button></div><div class="log-count-row"><span id="logCount">0 событий</span></div><div id="eventLog" class="event-log"><p class="empty-log">Здесь появятся результаты ходов.</p></div></aside>
         </div>
         <section class="players-section"><div class="players-heading"><div><p class="eyebrow">УЧАСТНИКИ</p><h2>Игроки</h2></div><span id="playersSummary" class="subtle-label">2 игрока · по очереди</span></div><div id="playersList" class="players-list"></div></section>
       </section>
       <footer class="game-footer"><span>ЛАБИРИНТ <i>·</i> ИГРОВОЙ ВЕДУЩИЙ</span><button id="newGame" class="text-button">Новая партия</button></footer>
     </main>
 
-    <div id="resultModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="resultTitle"><section class="result-card"><span class="result-spark">✳</span><p class="eyebrow">ПАРТИЯ ЗАВЕРШЕНА</p><h2 id="resultTitle">Победа!</h2><p id="resultCopy"></p><div id="scoreList" class="score-list"></div><button id="resultNewGame" class="primary-button">Новая партия <span>↗</span></button></section></div>
   </div>
   <script src="app.js"></script>
 </body>

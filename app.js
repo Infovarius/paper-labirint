@@ -118,7 +118,7 @@
       fakes: Math.max(0, Math.min(6, Number($('#fakeCount').value) || 0))
     };
     const generated = generateMaze(size);
-    game = { size, cells: generated.cells, exit: generated.exit, players: [], turn: 0, turnNumber: 1, log: [], winner: null, running: true, revealMap: false, items: { realTreasure: null } };
+    game = { size, cells: generated.cells, exit: generated.exit, players: [], turn: 0, turnNumber: 1, log: [], winner: null, running: true, revealMap: false, currentCommand: '', items: { realTreasure: null } };
     const reserved = new Set();
     game.hospital = takeCoord(reserved);
     cellAt(game.hospital.x, game.hospital.y).terrain = { type: 'hospital' };
@@ -161,9 +161,8 @@
   function coordinateHasPlayer(x, y, exceptId = -1) { return game.players.find(p => p.alive && !p.escaped && !p.outside && p.id !== exceptId && p.x === x && p.y === y); }
 
   function pushLog(player, message, type = 'normal') {
-    const line = { turn: game.turnNumber, name: player ? player.name : 'Ведущий', message, type };
+    const line = { turn: game.turnNumber, name: player ? player.name : 'Ведущий', command: game.currentCommand || '—', message, type };
     game.log.unshift(line);
-    if (game.log.length > 40) game.log.pop();
     $('#latestReport').innerHTML = `<span class="report-ornament">${type === 'good' ? '✦' : type === 'bad' ? '!' : '✳'}</span><p><strong>${escapeHtml(line.name)}.</strong> ${escapeHtml(message)}</p>`;
     renderLog();
   }
@@ -172,7 +171,7 @@
 
   function renderLog() {
     $('#logCount').textContent = `${game.log.length} ${game.log.length === 1 ? 'событие' : game.log.length < 5 ? 'события' : 'событий'}`;
-    $('#eventLog').innerHTML = game.log.length ? game.log.map(entry => `<div class="log-entry"><span class="log-turn">${String(entry.turn).padStart(2, '0')}</span><span><strong>${escapeHtml(entry.name)}</strong> · ${escapeHtml(entry.message)}</span></div>`).join('') : '<p class="empty-log">Здесь появятся результаты ходов.</p>';
+    $('#eventLog').innerHTML = game.log.length ? game.log.map(entry => `<div class="log-entry"><span class="log-turn">${String(entry.turn).padStart(2, '0')}</span><span><strong>${escapeHtml(entry.name)}</strong><small class="log-command">${escapeHtml(entry.command || '—')}</small><span>${escapeHtml(entry.message)}</span></span></div>`).join('') : '<p class="empty-log">Здесь появятся результаты ходов.</p>';
   }
 
   function setReport(player, message, type = 'normal') { pushLog(player, message, type); }
@@ -268,10 +267,14 @@
     $('#headerStatus').innerHTML = '<span class="status-dot"></span> Партия завершена';
     $('#mapPanel').classList.remove('hidden'); $('#mapToggle').querySelector('span').textContent = 'Карта ведущего';
     renderMap(); renderGame();
+    $('#gameEyebrow').textContent = 'СОСТОЯНИЕ ПАРТИИ';
     $('#resultTitle').textContent = winner ? `${winner.name} победил!` : 'Партия завершена';
     $('#resultCopy').textContent = message;
+    $('#toastTitle').textContent = 'Игра окончена';
+    $('#toastMessage').textContent = winner ? `Игрок ${winner.name} победил!` : message;
+    $('#gameOverToast').classList.remove('hidden');
     $('#scoreList').innerHTML = game.players.map(p => `<div class="score-item"><span>${escapeHtml(p.name)}</span><strong>${p.id === (winner?.id ?? -1) ? 'ВЫНЕС КЛАД' : p.escaped ? 'ПОБЕДИЛ' : p.outside ? 'СНАРУЖИ · МОЖЕТ ВЕРНУТЬСЯ' : p.cargo ? 'НЕСЁТ КЛАД' : 'В ЛАБИРИНТЕ'}</strong></div>`).join('');
-    $('#resultModal').classList.remove('hidden');
+    $('#endgamePanel').classList.remove('hidden');
   }
 
   function advanceTurn() {
@@ -386,11 +389,19 @@
   function chooseDirection(dir) {
     if (!game || !game.running) return;
     const player = currentPlayer(); if (!player) return;
-    if (player.outside) { doMove(player, dir, 1); return; }
+    if (player.outside) { game.currentCommand = `Возврат: ${DIRS[dir].label}`; doMove(player, dir, 1); return; }
     const action = player.riverEscape > 0 ? 'move' : selectedAction;
-    if (action === 'move') doMove(player, dir, Math.max(1, Math.min(10, Number($('#steps').value) || 1)));
-    else if (action === 'shoot') doShoot(player, dir);
-    else doDynamite(player, dir);
+    if (action === 'move') {
+      const steps = Math.max(1, Math.min(10, Number($('#steps').value) || 1));
+      game.currentCommand = `Шаг: ${DIRS[dir].label}, ${steps}`;
+      doMove(player, dir, steps);
+    } else if (action === 'shoot') {
+      game.currentCommand = `Выстрел: ${DIRS[dir].label}`;
+      doShoot(player, dir);
+    } else {
+      game.currentCommand = `Динамит: ${DIRS[dir].label}`;
+      doDynamite(player, dir);
+    }
   }
 
   function selectAction(action) {
@@ -422,6 +433,8 @@
       button.disabled = !game.running || (player.outside && button.dataset.action !== 'move');
       if (player.outside) button.classList.toggle('active', button.dataset.action === 'move');
     });
+    document.querySelectorAll('.direction:not(.center)').forEach(button => { button.disabled = !game.running; });
+    $('#stepMinus').disabled = $('#stepPlus').disabled = $('#steps').disabled = !game.running;
     if (player.outside) {
       $('#moveOptions').classList.add('hidden');
       $('#actionHint').textContent = `Вы снаружи. В свой следующий ход вернитесь направлением ${DIRS[DIRS[game.exit.dir].opposite].label}.`;
@@ -509,8 +522,31 @@
   }
 
   function resetToSetup() {
-    $('#resultModal').classList.add('hidden'); gameScreen.classList.add('hidden'); setupScreen.classList.remove('hidden');
+    $('#endgamePanel').classList.add('hidden'); gameScreen.classList.add('hidden'); setupScreen.classList.remove('hidden');
+    $('#gameOverToast').classList.add('hidden');
     $('#headerStatus').innerHTML = '<span class="status-dot"></span> Новая партия'; game = null;
+    $('#gameEyebrow').textContent = 'ПАРТИЯ ИДЁТ';
+  }
+
+  function downloadFile(blob, filename) {
+    const url = URL.createObjectURL(blob), link = document.createElement('a');
+    link.href = url; link.download = filename; document.body.appendChild(link); link.click(); link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  function exportField() {
+    if (!game) return;
+    $('#mazeCanvas').toBlob(blob => {
+      if (blob) downloadFile(blob, `labirint-${game.size}x${game.size}-${new Date().toISOString().slice(0, 10)}.png`);
+    }, 'image/png');
+  }
+
+  function exportLog() {
+    if (!game) return;
+    const quote = value => `"${String(value).replace(/"/g, '""')}"`;
+    const rows = [['Ход', 'Игрок', 'Команда', 'Результат'], ...game.log.slice().reverse().map(line => [line.turn, line.name, line.command || '—', line.message])];
+    const csv = '\uFEFF' + rows.map(row => row.map(quote).join(';')).join('\r\n');
+    downloadFile(new Blob([csv], { type: 'text/csv;charset=utf-8' }), `labirint-zhurnal-${new Date().toISOString().slice(0, 10)}.csv`);
   }
 
   playerCountInput.addEventListener('input', updatePlayerSetup);
@@ -526,8 +562,11 @@
     $('#mapToggle').querySelector('span').textContent = $('#mapPanel').classList.contains('hidden') ? 'Карта ведущего' : 'Скрыть карту';
   });
   $('#hideMap').addEventListener('click', () => { $('#mapPanel').classList.add('hidden'); $('#mapToggle').querySelector('span').textContent = 'Карта ведущего'; });
+  $('#exportField').addEventListener('click', exportField);
+  $('#exportLog').addEventListener('click', exportLog);
   $('#endGame').addEventListener('click', () => { if (game?.running) endGame(null, 'Ведущий завершил партию.'); });
   $('#newGame').addEventListener('click', resetToSetup);
   $('#resultNewGame').addEventListener('click', resetToSetup);
+  $('#closeGameOverToast').addEventListener('click', () => $('#gameOverToast').classList.add('hidden'));
   updatePlayerSetup();
 })();
