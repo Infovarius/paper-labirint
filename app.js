@@ -118,7 +118,7 @@
       fakes: Math.max(0, Math.min(6, Number($('#fakeCount').value) || 0))
     };
     const generated = generateMaze(size);
-    game = { size, cells: generated.cells, exit: generated.exit, players: [], turn: 0, turnNumber: 1, log: [], winner: null, running: true, revealMap: false, currentCommand: '', items: { realTreasure: null } };
+    game = { size, cells: generated.cells, exit: generated.exit, players: [], turn: 0, turnNumber: 1, log: [], winner: null, running: true, revealMap: false, currentCommand: '', arsenalReusable: $('#arsenalModeReusable').checked, items: { realTreasure: null } };
     const reserved = new Set();
     game.hospital = takeCoord(reserved);
     cellAt(game.hospital.x, game.hospital.y).terrain = { type: 'hospital' };
@@ -232,8 +232,9 @@
       return 'stop';
     }
     if (terrain?.type === 'arsenal') {
-      player.bullets += 5; player.dynamite += 1; cell.terrain = null;
-      setReport(player, 'Вы нашли арсенал: +5 патронов и динамит.', 'good');
+      player.bullets += 5; player.dynamite += 1;
+      if (!game.arsenalReusable) cell.terrain = null;
+      setReport(player, `Вы нашли ${game.arsenalReusable ? 'многоразовый арсенал' : 'одноразовый арсенал'}: +5 патронов и динамит.${game.arsenalReusable ? ' Он останется доступен другим игрокам.' : ' Он израсходован.'}`, 'good');
     }
     if (terrain?.type === 'river') {
       const traversed = [];
