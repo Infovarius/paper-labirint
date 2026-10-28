@@ -232,9 +232,14 @@
       return 'stop';
     }
     if (terrain?.type === 'arsenal') {
-      player.bullets += 5; player.dynamite += 1;
-      if (!game.arsenalReusable) cell.terrain = null;
-      setReport(player, `Вы нашли ${game.arsenalReusable ? 'многоразовый арсенал' : 'одноразовый арсенал'}: +5 патронов и динамит.${game.arsenalReusable ? ' Он останется доступен другим игрокам.' : ' Он израсходован.'}`, 'good');
+      if (game.arsenalReusable) {
+        player.bullets = Math.max(player.bullets, 5);
+        player.dynamite = Math.max(player.dynamite, 1);
+        setReport(player, 'Многоразовый арсенал пополнил запас до 5 патронов и 1 динамита. Он останется доступен другим игрокам.', 'good');
+      } else {
+        player.bullets += 5; player.dynamite += 1; cell.terrain = null;
+        setReport(player, 'Вы нашли одноразовый арсенал: +5 патронов и динамит. Он израсходован.', 'good');
+      }
     }
     if (terrain?.type === 'river') {
       const traversed = [];
