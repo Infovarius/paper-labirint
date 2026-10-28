@@ -221,10 +221,8 @@
     const cell = cellAt(player.x, player.y);
     const terrain = cell.terrain;
     if (terrain?.type === 'hospital') {
-      player.bullets = 0; player.dynamite = 0; player.riverEscape = 0;
-      const dropped = dropCargo(player, player.x, player.y);
-      setReport(player, `Вы попали в госпиталь. Запасы потеряны.${dropped ? ' Клад остался в лабиринте.' : ''}`, 'bad');
-      return 'stop';
+      setReport(player, 'Вы прошли через госпиталь. Запасы сохранены.');
+      return options.continue ? 'continue' : 'normal';
     }
     if (terrain?.type === 'teleporter') {
       player.x = terrain.mate.x; player.y = terrain.mate.y;
