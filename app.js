@@ -462,6 +462,29 @@
     finishAction();
   }
 
+  function passWithCurrent(player) {
+    if (!game?.running || !player || player.riverEscape <= 0) return;
+    game.currentCommand = 'Пассивный перенос течением';
+    let moved = 0;
+    for (let i = 0; i < 3; i++) {
+      const terrain = cellAt(player.x, player.y).terrain;
+      if (terrain?.type !== 'river' || !openBetween(player.x, player.y, terrain.flow)) break;
+      const d = DIRS[terrain.flow];
+      player.x += d.dx; player.y += d.dy; moved++;
+      if (!inBounds(player.x, player.y, game.size)) break;
+    }
+    if (!inBounds(player.x, player.y, game.size) || cellAt(player.x, player.y).terrain?.type !== 'river') {
+      player.riverEscape = 0;
+      setReport(player, `Вы пропустили движение: течение вынесло вас на берег после ${moved} ${moved === 1 ? 'клетки' : 'клеток'}.`, 'good');
+      processCell(player);
+    } else {
+      player.riverEscape--;
+      if (player.riverEscape <= 0) hospitalize(player, 'Вас унесло течением, и вы не смогли выбраться из реки.', true);
+      else setReport(player, `Вы пропустили движение. Течение пронесло вас на ${moved} ${moved === 1 ? 'клетку' : 'клетки'}, но вы остались в реке. Попыток выбраться: ${player.riverEscape}.`, 'bad');
+    }
+    finishAction();
+  }
+
   function chooseDirection(dir) {
     if (!game || !game.running) return;
     const player = currentPlayer(); if (!player) return;
@@ -511,6 +534,11 @@
     });
     document.querySelectorAll('.direction:not(.center)').forEach(button => { button.disabled = !game.running; });
     $('#stepMinus').disabled = $('#stepPlus').disabled = $('#steps').disabled = !game.running;
+    const passButton = $('#passButton');
+    passButton.disabled = !game.running || player.riverEscape <= 0;
+    passButton.textContent = player.riverEscape > 0 ? '≈' : '✳';
+    passButton.setAttribute('aria-label', player.riverEscape > 0 ? 'Пропустить активное движение и плыть по течению' : 'Пасс доступен только в реке');
+    passButton.classList.toggle('pass-active', player.riverEscape > 0 && game.running);
     if (player.outside) {
       $('#moveOptions').classList.add('hidden');
       $('#actionHint').textContent = `Вы снаружи. В свой следующий ход вернитесь направлением ${DIRS[DIRS[game.exit.dir].opposite].label}.`;
@@ -634,6 +662,7 @@
     else selectAction(button.dataset.action);
   }));
   document.querySelectorAll('.direction').forEach(button => button.addEventListener('click', () => button.dataset.dir && chooseDirection(button.dataset.dir)));
+  $('#passButton').addEventListener('click', () => passWithCurrent(currentPlayer()));
   $('#stepMinus').addEventListener('click', () => { $('#steps').value = Math.max(1, Number($('#steps').value) - 1); });
   $('#stepPlus').addEventListener('click', () => { $('#steps').value = Math.min(10, Number($('#steps').value) + 1); });
   $('#mapToggle').addEventListener('click', () => {
