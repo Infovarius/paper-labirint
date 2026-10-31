@@ -451,6 +451,17 @@
     finishAction();
   }
 
+  function doPunch(player) {
+    if (!player || player.outside || player.riverEscape > 0) return;
+    const target = coordinateHasPlayer(player.x, player.y, player.id);
+    if (!target) return;
+    game.currentCommand = 'Удар кулаком';
+    setReport(player, `Вы ударили ${target.name} кулаком. Игрок отправлен в госпиталь.`, 'bad');
+    hospitalize(target, 'Вас ударили кулаком.');
+    selectAction('move');
+    finishAction();
+  }
+
   function chooseDirection(dir) {
     if (!game || !game.running) return;
     const player = currentPlayer(); if (!player) return;
@@ -495,7 +506,7 @@
       return `<div class="player-card ${i === game.turn && game.running ? 'active' : ''} ${p.escaped ? 'out' : p.outside ? 'away' : ''}"><div class="avatar">${escapeHtml(p.name.slice(0, 1).toLocaleUpperCase('ru'))}</div><div class="player-info"><strong>${escapeHtml(p.name)}</strong><small>${status}</small></div><div class="inventory"><span>● ${p.bullets}</span><span>◆ ${p.dynamite}</span></div></div>`;
     }).join('');
     document.querySelectorAll('.action-tab').forEach(button => {
-      button.disabled = !game.running || (player.outside && button.dataset.action !== 'move');
+      button.disabled = !game.running || (player.outside && button.dataset.action !== 'move') || (player.riverEscape > 0 && button.dataset.action !== 'move') || (button.dataset.action === 'punch' && !coordinateHasPlayer(player.x, player.y, player.id));
       if (player.outside) button.classList.toggle('active', button.dataset.action === 'move');
     });
     document.querySelectorAll('.direction:not(.center)').forEach(button => { button.disabled = !game.running; });
@@ -618,7 +629,10 @@
   $('#startGame').addEventListener('click', () => {
     try { createGame(); } catch (error) { window.alert(error.message || 'Не удалось создать лабиринт.'); }
   });
-  document.querySelectorAll('.action-tab').forEach(button => button.addEventListener('click', () => selectAction(button.dataset.action)));
+  document.querySelectorAll('.action-tab').forEach(button => button.addEventListener('click', () => {
+    if (button.dataset.action === 'punch') doPunch(currentPlayer());
+    else selectAction(button.dataset.action);
+  }));
   document.querySelectorAll('.direction').forEach(button => button.addEventListener('click', () => button.dataset.dir && chooseDirection(button.dataset.dir)));
   $('#stepMinus').addEventListener('click', () => { $('#steps').value = Math.max(1, Number($('#steps').value) - 1); });
   $('#stepPlus').addEventListener('click', () => { $('#steps').value = Math.min(10, Number($('#steps').value) + 1); });
