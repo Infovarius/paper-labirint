@@ -85,17 +85,48 @@
   }
 
   function makeRiverLoop(reserved) {
-    const squares = [];
-    for (let y = 0; y < game.size - 1; y++) for (let x = 0; x < game.size - 1; x++) {
-      const coords = [{ x, y }, { x: x + 1, y }, { x: x + 1, y: y + 1 }, { x, y: y + 1 }];
-      if (coords.some(p => isExitCoord(p) || reserved.has(key(p.x, p.y)) || cellAt(p.x, p.y).terrain || cellAt(p.x, p.y).item)) continue;
-      squares.push(coords);
+    const free = p => inBounds(p.x, p.y, game.size) && !isExitCoord(p) && !reserved.has(key(p.x, p.y)) && !cellAt(p.x, p.y).terrain && !cellAt(p.x, p.y).item;
+    let loop = null;
+    for (let attempt = 0; attempt < 700 && !loop; attempt++) {
+      const maxWidth = Math.min(game.size, 9);
+      const width = 3 + Math.floor(Math.random() * (maxWidth - 2));
+      const height = 3 + Math.floor(Math.random() * (maxWidth - 2));
+      const left = Math.floor(Math.random() * (game.size - width + 1));
+      const top = Math.floor(Math.random() * (game.size - height + 1));
+      const right = left + width - 1, bottom = top + height - 1;
+      const outline = [];
+      for (let x = left; x <= right; x++) outline.push({ x, y: top });
+      for (let y = top + 1; y <= bottom; y++) outline.push({ x: right, y });
+      for (let x = right - 1; x >= left; x--) outline.push({ x, y: bottom });
+      for (let y = bottom - 1; y > top; y--) outline.push({ x: left, y });
+      if (outline.some(p => !free(p))) continue;
+
+      const bumps = [];
+      for (let i = 0; i < outline.length; i++) {
+        const p = outline[i], q = outline[(i + 1) % outline.length];
+        let outward = null;
+        if (p.y === top && q.y === top) outward = { dx: 0, dy: -1 };
+        else if (p.x === right && q.x === right) outward = { dx: 1, dy: 0 };
+        else if (p.y === bottom && q.y === bottom) outward = { dx: 0, dy: 1 };
+        else if (p.x === left && q.x === left) outward = { dx: -1, dy: 0 };
+        if (!outward) continue;
+        const bumpA = { x: p.x + outward.dx, y: p.y + outward.dy };
+        const bumpB = { x: q.x + outward.dx, y: q.y + outward.dy };
+        if (free(bumpA) && free(bumpB)) bumps.push({ index: i, bumpA, bumpB });
+      }
+      if (!bumps.length) continue;
+      const bump = bumps[Math.floor(Math.random() * bumps.length)];
+      loop = [];
+      for (let i = 0; i < outline.length; i++) {
+        loop.push(outline[i]);
+        if (i === bump.index) loop.push(bump.bumpA, bump.bumpB);
+      }
     }
-    const loop = shuffle(squares)[0];
     if (!loop) return false;
-    const flows = ['E', 'S', 'W', 'N'];
     loop.forEach((p, index) => {
-      const dir = flows[index], d = DIRS[dir], next = loop[(index + 1) % loop.length];
+      const next = loop[(index + 1) % loop.length];
+      const dir = Object.keys(DIRS).find(name => p.x + DIRS[name].dx === next.x && p.y + DIRS[name].dy === next.y);
+      const d = DIRS[dir];
       cellAt(p.x, p.y).walls[dir] = false;
       cellAt(next.x, next.y).walls[d.opposite] = false;
       cellAt(p.x, p.y).terrain = { type: 'river', flow: dir };
@@ -189,7 +220,7 @@
     if (!player.cargo) return null;
     let place = { x, y };
     if (drowned) {
-      const downstream = [];
+      const shore = new Map();
       let cursor = { x, y };
       for (let i = 0; i < 4; i++) {
         const terrain = cellAt(cursor.x, cursor.y).terrain;
@@ -197,9 +228,19 @@
         const dir = terrain.flow;
         if (!openBetween(cursor.x, cursor.y, dir)) break;
         const d = DIRS[dir]; cursor = { x: cursor.x + d.dx, y: cursor.y + d.dy };
-        if (!isExitCoord(cursor) && !cellAt(cursor.x, cursor.y).item) downstream.push(cursor);
+        if (!inBounds(cursor.x, cursor.y, game.size)) break;
+        if (cellAt(cursor.x, cursor.y).terrain?.type !== 'river') {
+          if (!isExitCoord(cursor) && !cellAt(cursor.x, cursor.y).item) shore.set(key(cursor.x, cursor.y), cursor);
+          break;
+        }
+        for (const bankDir of Object.keys(DIRS)) {
+          const bank = { x: cursor.x + DIRS[bankDir].dx, y: cursor.y + DIRS[bankDir].dy };
+          if (!inBounds(bank.x, bank.y, game.size) || isExitCoord(bank) || cellAt(bank.x, bank.y).terrain?.type === 'river' || cellAt(bank.x, bank.y).item) continue;
+          shore.set(key(bank.x, bank.y), bank);
+        }
       }
-      if (downstream.length) place = downstream[Math.floor(Math.random() * downstream.length)];
+      const choices = [...shore.values()];
+      if (choices.length) place = choices[Math.floor(Math.random() * choices.length)];
     }
     place = findItemDrop(place.x, place.y);
     cellAt(place.x, place.y).item = { type: 'treasure', real: player.cargo === 'real' };
