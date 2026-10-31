@@ -349,6 +349,27 @@
     if (game.running) advanceTurn();
   }
 
+  function carryWithCurrent(player, distance, cause) {
+    let moved = 0;
+    for (let i = 0; i < distance; i++) {
+      const terrain = cellAt(player.x, player.y).terrain;
+      if (terrain?.type !== 'river' || !openBetween(player.x, player.y, terrain.flow)) break;
+      const d = DIRS[terrain.flow];
+      player.x += d.dx; player.y += d.dy; moved++;
+    }
+    if (cellAt(player.x, player.y).terrain?.type !== 'river') {
+      player.riverEscape = 0;
+      setReport(player, `${cause} Течение пронесло вас на ${moved} ${moved === 1 ? 'клетку' : 'клеток'} и вынесло на берег.`, 'good');
+      processCell(player);
+    } else {
+      player.riverEscape--;
+      setReport(player, `${cause} Течение пронесло вас на ${moved} ${moved === 1 ? 'клетку' : 'клеток'}, но вы остались в реке.`, 'bad');
+      if (player.riverEscape <= 0) hospitalize(player, 'Вам не удалось выбраться из реки.', true);
+      else $('#riverTurnsText').textContent = `Осталось попыток: ${player.riverEscape}`;
+    }
+    finishAction();
+  }
+
   function refillFromReusableArsenal(player) {
     const terrain = cellAt(player.x, player.y).terrain;
     if (!game.arsenalReusable || terrain?.type !== 'arsenal') return false;
@@ -369,28 +390,23 @@
       finishAction(); return;
     }
     if (player.riverEscape > 0) {
-      const d = DIRS[dir];
-      const nx = player.x + d.dx, ny = player.y + d.dy;
-      const wallAhead = cellAt(player.x, player.y).walls[dir];
-      if (wallAhead || (inBounds(nx, ny, game.size) && cellAt(nx, ny).terrain?.type === 'river')) {
-        player.riverEscape--;
-        if (player.riverEscape <= 0) hospitalize(player, 'Вам не удалось выбраться из реки.', true);
-        else setReport(player, `Вы не смогли выбраться из реки. Осталась ${player.riverEscape} попытка.`, 'bad');
+      const river = cellAt(player.x, player.y).terrain;
+      const d = DIRS[dir], nx = player.x + d.dx, ny = player.y + d.dy;
+      if (cellAt(player.x, player.y).walls[dir]) {
+        carryWithCurrent(player, 3, 'Вы попытались двинуться, но упёрлись в стену.');
+      } else if (dir === river.flow) {
+        carryWithCurrent(player, 4, 'Вы направились по течению.');
+      } else if (dir === DIRS[river.flow].opposite) {
+        carryWithCurrent(player, 2, 'Вы направились против течения.');
+      } else if (inBounds(nx, ny, game.size) && cellAt(nx, ny).terrain?.type !== 'river') {
+        player.x = nx; player.y = ny; player.riverEscape = 0;
+        setReport(player, 'Вы выбрались из реки на берег.', 'good');
+        processCell(player);
+        finishAction();
       } else {
-        player.riverEscape = 0;
-        if (!inBounds(nx, ny, game.size)) {
-          if (player.cargo === 'real') { player.escaped = true; player.alive = false; setReport(player, 'Вы выбрались из реки и вынесли настоящий клад!', 'good'); renderGame(); renderMap(); endGame(player, `${player.name} нашёл настоящий клад и покинул лабиринт.`); return; }
-          player.outside = true;
-          const carriedFake = player.cargo === 'fake';
-          player.cargo = null;
-          setReport(player, carriedFake ? 'Вы вышли с фальшивым кладом. Победы нет; в следующий ход можно вернуться.' : 'Вы вышли без настоящего клада. В следующий ход можно вернуться.');
-        } else {
-          player.x = nx; player.y = ny;
-          setReport(player, 'Вам удалось выбраться из реки.');
-          processCell(player);
-        }
+        carryWithCurrent(player, 3, 'Вы попытались плыть в сторону, но не смогли покинуть реку.');
       }
-      finishAction(); return;
+      return;
     }
     let moved = 0, hitWall = false, stopped = false, exited = false;
     const logCountBefore = game.log.length;
@@ -465,24 +481,7 @@
   function passWithCurrent(player) {
     if (!game?.running || !player || player.riverEscape <= 0) return;
     game.currentCommand = 'Пассивный перенос течением';
-    let moved = 0;
-    for (let i = 0; i < 3; i++) {
-      const terrain = cellAt(player.x, player.y).terrain;
-      if (terrain?.type !== 'river' || !openBetween(player.x, player.y, terrain.flow)) break;
-      const d = DIRS[terrain.flow];
-      player.x += d.dx; player.y += d.dy; moved++;
-      if (!inBounds(player.x, player.y, game.size)) break;
-    }
-    if (!inBounds(player.x, player.y, game.size) || cellAt(player.x, player.y).terrain?.type !== 'river') {
-      player.riverEscape = 0;
-      setReport(player, `Вы пропустили движение: течение вынесло вас на берег после ${moved} ${moved === 1 ? 'клетки' : 'клеток'}.`, 'good');
-      processCell(player);
-    } else {
-      player.riverEscape--;
-      if (player.riverEscape <= 0) hospitalize(player, 'Вас унесло течением, и вы не смогли выбраться из реки.', true);
-      else setReport(player, `Вы пропустили движение. Течение пронесло вас на ${moved} ${moved === 1 ? 'клетку' : 'клетки'}, но вы остались в реке. Попыток выбраться: ${player.riverEscape}.`, 'bad');
-    }
-    finishAction();
+    carryWithCurrent(player, 3, 'Вы пропустили активное движение.');
   }
 
   function chooseDirection(dir) {
@@ -545,7 +544,7 @@
     }
     if (player.riverEscape > 0) {
       document.querySelectorAll('.action-tab').forEach(button => button.classList.toggle('active', button.dataset.action === 'move'));
-      $('#actionHint').textContent = 'Выберите направление, чтобы попытаться выбраться из реки.';
+      $('#actionHint').textContent = 'К берегу — выход; по течению сносит на 4 клетки, против — на 2, стена или пас — на 3.';
     }
   }
 
