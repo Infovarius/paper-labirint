@@ -125,7 +125,7 @@
     const names = [...nameFields.querySelectorAll('input')].map((input, i) => input.value.trim() || `Игрок ${i + 1}`);
     for (let i = 0; i < count; i++) {
       const p = takeCoord(reserved);
-      game.players.push({ id: i, name: names[i], x: p.x, y: p.y, bullets: 0, dynamite: 0, cargo: null, riverEscape: 0, escaped: false, outside: false, alive: true });
+      game.players.push({ id: i, name: names[i], x: p.x, y: p.y, bullets: 0, dynamite: 0, cargo: null, riverEscape: 0, escaped: false, outside: false, alive: true, skipNextTurn: false });
     }
     for (let pair = 0; pair < requested.teleports; pair++) {
       const a = takeCoord(reserved), b = takeCoord(reserved), pairId = pair + 1;
@@ -212,6 +212,7 @@
     const dropped = dropCargo(player, from.x, from.y, drowned);
     player.x = game.hospital.x; player.y = game.hospital.y;
     player.bullets = 0; player.dynamite = 0; player.riverEscape = 0;
+    player.skipNextTurn = true;
     let message = `${reason} ${player.name} попадает в госпиталь. Патроны и динамит потеряны.`;
     if (dropped) message += ' Клад остался в лабиринте.';
     setReport(player, message, 'bad');
@@ -284,9 +285,16 @@
   function advanceTurn() {
     if (!game.running) return;
     let found = -1;
-    for (let offset = 1; offset <= game.players.length; offset++) {
+    for (let offset = 1; offset <= game.players.length * 2; offset++) {
       const i = (game.turn + offset) % game.players.length;
-      if (game.players[i].alive && !game.players[i].escaped) { found = i; break; }
+      const candidate = game.players[i];
+      if (!candidate.alive || candidate.escaped) continue;
+      if (candidate.skipNextTurn) {
+        candidate.skipNextTurn = false;
+        setReport(candidate, `${candidate.name} пропускает ход после смерти и возвращения в госпиталь.`, 'bad');
+        continue;
+      }
+      found = i; break;
     }
     if (found < 0) { endGame(null, 'Все игроки покинули лабиринт. Настоящий клад так и не был вынесен.'); return; }
     if (found <= game.turn) game.turnNumber++;
@@ -298,6 +306,14 @@
   function finishAction() {
     renderGame(); renderMap();
     if (game.running) advanceTurn();
+  }
+
+  function refillFromReusableArsenal(player) {
+    const terrain = cellAt(player.x, player.y).terrain;
+    if (!game.arsenalReusable || terrain?.type !== 'arsenal') return false;
+    player.bullets = Math.max(player.bullets, 5);
+    player.dynamite = Math.max(player.dynamite, 1);
+    return true;
   }
 
   function doMove(player, dir, steps) {
@@ -362,6 +378,7 @@
     if (player.riverEscape > 0) { doMove(player, dir, 1); return; }
     if (player.bullets <= 0) { $('#actionHint').textContent = 'Нет патронов. Найдите арсенал.'; return; }
     player.bullets--;
+    const refilled = refillFromReusableArsenal(player);
     const d = DIRS[dir]; let x = player.x, y = player.y, hit = null, stoppedByWall = false;
     for (let i = 0; i < game.size * 2; i++) {
       if (!openBetween(x, y, dir)) { stoppedByWall = true; break; }
@@ -371,9 +388,10 @@
       if (hit) break;
     }
     if (hit) {
-      setReport(player, `Выстрел попал в ${hit.name}. Игрок отправлен в госпиталь.`, 'bad');
+      setReport(player, `Выстрел попал в ${hit.name}. Игрок отправлен в госпиталь.${refilled ? ' Многоразовый арсенал автоматически пополнил боезапас.' : ''}`, 'bad');
       hospitalize(hit, 'Вы попали под выстрел.');
-    } else setReport(player, stoppedByWall ? 'Вы выстрелили вслепую. Пуля остановилась о стену.' : 'Вы выстрелили вслепую. Никого не задели.');
+    } else setReport(player, `${stoppedByWall ? 'Вы выстрелили вслепую. Пуля остановилась о стену.' : 'Вы выстрелили вслепую. Никого не задели.'}${refilled ? ' Многоразовый арсенал автоматически пополнил боезапас.' : ''}`);
+    selectAction('move');
     finishAction();
   }
 
@@ -386,7 +404,9 @@
     cellAt(player.x, player.y).walls[dir] = false;
     if (inBounds(nx, ny, game.size)) cellAt(nx, ny).walls[d.opposite] = false;
     player.dynamite--;
-    setReport(player, `Динамит разрушил стену на ${DIRS[dir].label}.` , 'good');
+    const refilled = refillFromReusableArsenal(player);
+    setReport(player, `Динамит разрушил стену на ${DIRS[dir].label}.${refilled ? ' Многоразовый арсенал автоматически пополнил запас.' : ''}` , 'good');
+    selectAction('move');
     finishAction();
   }
 
@@ -430,7 +450,7 @@
     $('#ammoBadge').textContent = player.bullets;
     $('#dynamiteBadge').textContent = player.dynamite;
     $('#playersList').innerHTML = game.players.map((p, i) => {
-      const status = p.escaped ? 'Победил' : !p.alive ? 'Вне игры' : p.outside ? 'Снаружи · может вернуться' : p.riverEscape ? 'В реке' : p.cargo ? 'Несёт клад' : 'В лабиринте';
+      const status = p.escaped ? 'Победил' : !p.alive ? 'Вне игры' : p.skipNextTurn ? 'Пропустит следующий ход' : p.outside ? 'Снаружи · может вернуться' : p.riverEscape ? 'В реке' : p.cargo ? 'Несёт клад' : 'В лабиринте';
       return `<div class="player-card ${i === game.turn && game.running ? 'active' : ''} ${p.escaped ? 'out' : p.outside ? 'away' : ''}"><div class="avatar">${escapeHtml(p.name.slice(0, 1).toLocaleUpperCase('ru'))}</div><div class="player-info"><strong>${escapeHtml(p.name)}</strong><small>${status}</small></div><div class="inventory"><span>● ${p.bullets}</span><span>◆ ${p.dynamite}</span></div></div>`;
     }).join('');
     document.querySelectorAll('.action-tab').forEach(button => {
@@ -511,9 +531,9 @@
         ctx.stroke();
       }
     }
-    game.players.filter(p => p.alive && !p.escaped).forEach((p, i) => {
+    game.players.filter(p => (p.alive && !p.escaped) || p.escaped).forEach((p, i) => {
       let px = pad + p.x * tile + tile / 2, py = pad + p.y * tile + tile / 2;
-      if (p.outside) {
+      if (p.outside || p.escaped) {
         if (game.exit.dir === 'N') py -= tile;
         if (game.exit.dir === 'S') py += tile;
         if (game.exit.dir === 'E') px += tile;
