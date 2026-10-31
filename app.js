@@ -610,18 +610,39 @@
         ctx.stroke();
       }
     }
-    game.players.filter(p => (p.alive && !p.escaped) || p.escaped).forEach((p, i) => {
-      let px = pad + p.x * tile + tile / 2, py = pad + p.y * tile + tile / 2;
-      if (p.outside || p.escaped) {
-        if (game.exit.dir === 'N') py -= tile;
-        if (game.exit.dir === 'S') py += tile;
-        if (game.exit.dir === 'E') px += tile;
-        if (game.exit.dir === 'W') px -= tile;
-      }
-      ctx.fillStyle = ['#c6ee8c', '#efaa83', '#bc9bef', '#75b9d1', '#e6ca71', '#f08b9d'][i % 6];
-      ctx.beginPath(); ctx.arc(px, py, tile * .25, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#14201a'; ctx.font = `bold ${Math.max(8, tile * .32)}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(String(i + 1), px, py + .5);
+    const playerColors = ['#c6ee8c', '#efaa83', '#bc9bef', '#75b9d1', '#e6ca71', '#f08b9d'];
+    const visiblePlayers = game.players.map((player, index) => ({ player, index }))
+      .filter(({ player }) => (player.alive && !player.escaped) || player.escaped);
+    const markerGroups = new Map();
+    visiblePlayers.forEach(token => {
+      const { player } = token;
+      const groupKey = player.outside || player.escaped ? `exit-${game.exit.x},${game.exit.y}` : key(player.x, player.y);
+      if (!markerGroups.has(groupKey)) markerGroups.set(groupKey, []);
+      markerGroups.get(groupKey).push(token);
     });
+    markerGroups.forEach(tokens => tokens.forEach(({ player, index }, slot) => {
+      let cx = pad + player.x * tile + tile / 2, cy = pad + player.y * tile + tile / 2;
+      if (player.outside || player.escaped) {
+        if (game.exit.dir === 'N') cy -= tile;
+        if (game.exit.dir === 'S') cy += tile;
+        if (game.exit.dir === 'E') cx += tile;
+        if (game.exit.dir === 'W') cx -= tile;
+      }
+      const count = tokens.length;
+      let radius = tile * .25;
+      if (count > 1) {
+        const orbit = tile * Math.min(.255, .15 + count * .017);
+        const angle = -Math.PI / 2 + Math.PI * 2 * slot / count;
+        cx += Math.cos(angle) * orbit; cy += Math.sin(angle) * orbit;
+        radius = tile * (count <= 2 ? .17 : count <= 4 ? .15 : .12);
+      }
+      ctx.fillStyle = playerColors[index % playerColors.length];
+      ctx.beginPath(); ctx.arc(cx, cy, radius, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#101b1a'; ctx.lineWidth = Math.max(2, tile * .075); ctx.stroke();
+      ctx.strokeStyle = '#e9f0e2'; ctx.lineWidth = Math.max(1, tile * .025); ctx.stroke();
+      ctx.fillStyle = '#14201a'; ctx.font = `bold ${Math.max(8, radius * 1.15)}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(String(index + 1), cx, cy + .5);
+    }));
+    $('#playerMapLegend').innerHTML = game.players.map((player, index) => `<span><i style="--player-color:${playerColors[index % playerColors.length]}">${index + 1}</i>${escapeHtml(player.name)}</span>`).join('');
   }
 
   function resetToSetup() {

@@ -23,3 +23,4 @@
 .game-tools{flex-wrap:wrap;justify-content:flex-end}.game-tools #exportField{white-space:nowrap}
 .action-tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr))}.action-tab{padding-left:3px;padding-right:3px;font-size:9px}.punch-tab{color:#efaa83}
 .direction.center.pass-active{border-style:solid;border-color:#75b9d1;background:#183541;color:#9fe2f3;box-shadow:0 0 12px #75b9d133}
+.player-map-legend{display:flex;justify-content:center;align-items:center;flex-wrap:wrap;gap:8px 16px;margin-top:10px;color:#aab7aa;font-size:10px}.player-map-legend>span{display:inline-flex;align-items:center;gap:6px}.player-map-legend i{display:grid;place-items:center;width:18px;height:18px;border-radius:50%;background:var(--player-color);border:1px solid #e9f0e2;color:#14201a;font:700 9px var(--mono);font-style:normal}
