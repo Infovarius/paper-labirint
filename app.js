@@ -74,6 +74,7 @@
   }
 
   function isExitCoord(p) { return p.x === game.exit.x && p.y === game.exit.y; }
+  function returnDirection(player) { return DIRS[player?.outsideDir || game.exit.dir].opposite; }
   function availableCoords(reserved = new Set()) {
     return shuffle(allCoords().filter(p => !isExitCoord(p) && !reserved.has(key(p.x, p.y)) && !cellAt(p.x, p.y).terrain && !cellAt(p.x, p.y).item));
   }
@@ -156,7 +157,7 @@
     const names = [...nameFields.querySelectorAll('input')].map((input, i) => input.value.trim() || `Игрок ${i + 1}`);
     for (let i = 0; i < count; i++) {
       const p = takeCoord(reserved);
-      game.players.push({ id: i, name: names[i], x: p.x, y: p.y, bullets: 0, dynamite: 0, cargo: null, riverEscape: 0, escaped: false, outside: false, alive: true, skipNextTurn: false });
+      game.players.push({ id: i, name: names[i], x: p.x, y: p.y, bullets: 0, dynamite: 0, cargo: null, riverEscape: 0, escaped: false, outside: false, outsideDir: null, alive: true, skipNextTurn: false });
     }
     for (let pair = 0; pair < requested.teleports; pair++) {
       const a = takeCoord(reserved), b = takeCoord(reserved), pairId = pair + 1;
@@ -380,12 +381,13 @@
 
   function doMove(player, dir, steps) {
     if (player.outside) {
-      const inward = DIRS[game.exit.dir].opposite;
+      const inward = returnDirection(player);
       if (dir !== inward) {
         $('#actionHint').textContent = `Чтобы вернуться, выберите направление ${DIRS[inward].label}.`;
         return;
       }
       player.outside = false;
+      player.outsideDir = null;
       setReport(player, 'Вы вернулись в лабиринт.');
       finishAction(); return;
     }
@@ -414,6 +416,7 @@
       const d = DIRS[dir], nx = player.x + d.dx, ny = player.y + d.dy;
       if (cellAt(player.x, player.y).walls[dir]) { hitWall = true; break; }
       if (!inBounds(nx, ny, game.size)) {
+        player.outsideDir = dir;
         if (player.cargo === 'real') { player.escaped = true; player.alive = false; setReport(player, 'Вы вынесли настоящий клад из лабиринта!', 'good'); renderGame(); renderMap(); endGame(player, `${player.name} нашёл настоящий клад и покинул лабиринт.`); return; }
         player.outside = true;
         const carriedFake = player.cargo === 'fake';
@@ -531,7 +534,11 @@
       button.disabled = !game.running || (player.outside && button.dataset.action !== 'move') || (player.riverEscape > 0 && button.dataset.action !== 'move') || (button.dataset.action === 'punch' && !coordinateHasPlayer(player.x, player.y, player.id));
       if (player.outside) button.classList.toggle('active', button.dataset.action === 'move');
     });
-    document.querySelectorAll('.direction:not(.center)').forEach(button => { button.disabled = !game.running; });
+    const inwardDirection = player.outside ? returnDirection(player) : null;
+    document.querySelectorAll('.direction:not(.center)').forEach(button => {
+      button.disabled = !game.running || (player.outside && button.dataset.dir !== inwardDirection);
+      button.classList.toggle('return-direction', player.outside && button.dataset.dir === inwardDirection);
+    });
     $('#stepMinus').disabled = $('#stepPlus').disabled = $('#steps').disabled = !game.running;
     const passButton = $('#passButton');
     passButton.disabled = !game.running || player.riverEscape <= 0;
@@ -540,7 +547,7 @@
     passButton.classList.toggle('pass-active', player.riverEscape > 0 && game.running);
     if (player.outside) {
       $('#moveOptions').classList.add('hidden');
-      $('#actionHint').textContent = `Вы снаружи. В свой следующий ход вернитесь направлением ${DIRS[DIRS[game.exit.dir].opposite].label}.`;
+      $('#actionHint').textContent = `Вы снаружи. Нажмите подсвеченную стрелку «${DIRS[returnDirection(player)].label}», чтобы вернуться через выход.`;
     }
     if (player.riverEscape > 0) {
       document.querySelectorAll('.action-tab').forEach(button => button.classList.toggle('active', button.dataset.action === 'move'));
@@ -623,10 +630,20 @@
     markerGroups.forEach(tokens => tokens.forEach(({ player, index }, slot) => {
       let cx = pad + player.x * tile + tile / 2, cy = pad + player.y * tile + tile / 2;
       if (player.outside || player.escaped) {
-        if (game.exit.dir === 'N') cy -= tile;
-        if (game.exit.dir === 'S') cy += tile;
-        if (game.exit.dir === 'E') cx += tile;
-        if (game.exit.dir === 'W') cx -= tile;
+        const outDir = player.outsideDir || game.exit.dir;
+        const outward = DIRS[outDir], anchorX = cx, anchorY = cy;
+        cx += outward.dx * tile * 1.2;
+        cy += outward.dy * tile * 1.2;
+        const arrowX = anchorX + outward.dx * tile * .82;
+        const arrowY = anchorY + outward.dy * tile * .82;
+        const sideX = -outward.dy, sideY = outward.dx;
+        ctx.strokeStyle = '#c6ee8c'; ctx.fillStyle = '#c6ee8c'; ctx.lineWidth = Math.max(2, tile * .045);
+        ctx.beginPath(); ctx.moveTo(anchorX + outward.dx * tile * .53, anchorY + outward.dy * tile * .53); ctx.lineTo(arrowX, arrowY); ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(arrowX + outward.dx * tile * .08, arrowY + outward.dy * tile * .08);
+        ctx.lineTo(arrowX - outward.dx * tile * .09 + sideX * tile * .09, arrowY - outward.dy * tile * .09 + sideY * tile * .09);
+        ctx.lineTo(arrowX - outward.dx * tile * .09 - sideX * tile * .09, arrowY - outward.dy * tile * .09 - sideY * tile * .09);
+        ctx.closePath(); ctx.fill();
       }
       const count = tokens.length;
       let radius = tile * .25;
